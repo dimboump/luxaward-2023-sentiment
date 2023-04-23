@@ -1,0 +1,4 @@
+.vscode/
+.streamlit/
+venv/
+movie_*
