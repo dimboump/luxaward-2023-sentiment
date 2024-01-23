@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict
+from typing import Any, Dict, List, cast
 
 import pandas as pd
 import s3fs
@@ -38,7 +38,7 @@ def generate_wordcloud(movie_reviews: str) -> None:
 
 
 @st.cache_data(ttl=600)
-def load_reviews() -> Dict[str, list]:
+def load_reviews() -> Dict[str, List[Any]]:
     with fs.open(f'{BUCKET_NAME}/{REVIEWS_FILE}', 'r') as f:
         reviews = json.load(f)
     return reviews
@@ -65,6 +65,7 @@ def app() -> None:
 
     with col1:
         movie_choice = st.selectbox('Select movie', MOVIES)
+        movie_choice = cast(str, movie_choice)
 
         review = st.text_area(
             'Write your review (max 1000 characters)', max_chars=1000)
@@ -85,8 +86,8 @@ def app() -> None:
             if len(review) > 0:
                 reviews = load_reviews()
                 reviews.setdefault(movie_choice, [])
-                reviews[movie_choice].append(
-                    {"review": review, "sentiment_score": sentiment_score})
+                reviews[movie_choice] = cast(List[Any], reviews[movie_choice])
+                reviews[movie_choice].append({"review": review, "sentiment_score": sentiment_score})
                 save_reviews(reviews)
                 st.success('Review submitted successfully!')
             else:
@@ -95,10 +96,11 @@ def app() -> None:
     with col2:
         st.subheader('Wordcloud for ' + movie_choice)
         reviews = load_reviews()
-        movie_reviews = ' '.join([r["review"]
-                                  for r in reviews.get(movie_choice, [])])
-        if len(movie_reviews) > 0:
-            generate_wordcloud(movie_reviews)
+        movie_reviews = reviews.get(movie_choice, [])
+        movie_reviews_text = ' '.join([r["review"] for r in movie_reviews])
+
+        if len(movie_reviews_text) > 0:
+            generate_wordcloud(movie_reviews_text)
         else:
             st.warning('No reviews found for this movie. Write the first one!')
 
@@ -110,7 +112,7 @@ def app() -> None:
             for review in movie_reviews:
                 df = df.append({
                     'movie': movie,
-                    'sentiment': review['sentiment_score']
+                    'sentiment': review.get('sentiment_score', None)
                 }, ignore_index=True)
         if not df.empty:
             try:
